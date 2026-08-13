@@ -8,8 +8,7 @@ from io import BytesIO
 from transformers import CLIPProcessor, CLIPVisionModelWithProjection
 from langchain.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import initialize_agent, AgentType
-from langchain.memory import ConversationBufferMemory
+from langgraph.prebuilt import create_react_agent
 
 # Configuration
 EMBEDDINGS_PATH = "embeddings.npy"
@@ -18,12 +17,8 @@ MODEL_ID = "openai/clip-vit-base-patch32"
 
 # Load Model
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print("Loading CLIP model for agent...")
-try:
-    clip_model = CLIPVisionModelWithProjection.from_pretrained(MODEL_ID).to(device)
-    clip_processor = CLIPProcessor.from_pretrained(MODEL_ID)
-except Exception as e:
-    print(f"Error loading CLIP model: {e}")
+clip_model = None
+clip_processor = None
 
 # Load embeddings and metadata
 def load_embeddings_and_metadata():
@@ -36,12 +31,28 @@ def load_embeddings_and_metadata():
         print(f"Warning: Could not load embeddings or metadata: {e}")
         return None, []
 
+def get_clip_model():
+    global clip_model, clip_processor
+    if clip_model is None or clip_processor is None:
+        print("Loading CLIP model...")
+        clip_model = CLIPVisionModelWithProjection.from_pretrained(MODEL_ID).to(device)
+        clip_processor = CLIPProcessor.from_pretrained(MODEL_ID)
+    return clip_model, clip_processor
+
 def get_image_embedding(image_input):
     """Get CLIP embedding for an image from a path or URL."""
     try:
+        model, processor = get_clip_model()
+        
+        if isinstance(image_input, dict):
+            image_input = list(image_input.values())[0]
+        
         if isinstance(image_input, str):
-            if image_input.startswith("http://") or image_input.startswith("https://"):
-                response = requests.get(image_input, timeout=10)
+            image_input = image_input.strip(" '\"")
+            if image_input == "current_upload":
+                img = Image.open("uploaded_image.png").convert("RGB")
+            elif image_input.startswith("http://") or image_input.startswith("https://"):
+                response = requests.get(image_input, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
                 response.raise_for_status()
                 img = Image.open(BytesIO(response.content)).convert("RGB")
             else:
@@ -49,19 +60,22 @@ def get_image_embedding(image_input):
         elif isinstance(image_input, Image.Image):
             img = image_input.convert("RGB")
         else:
-             raise ValueError("Unsupported image input type.")
+             raise ValueError(f"Unsupported image input type: {type(image_input)}")
              
-        inputs = clip_processor(images=img, return_tensors="pt").to(device)
+        inputs = processor(images=img, return_tensors="pt").to(device)
         with torch.no_grad():
-            outputs = clip_model(**inputs)
+            outputs = model(**inputs)
             image_features = outputs.image_embeds
         
         # Normalize
         image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
         return image_features.cpu().numpy()[0]
     except Exception as e:
-        print(f"Error getting embedding: {e}")
-        return None
+        import traceback
+        with open("tailortalk_debug.log", "a") as logf:
+            logf.write(f"ERROR processing {image_input}: {e}\n{traceback.format_exc()}\n")
+        print(f"Error getting embedding for {image_input}: {e}")
+        return f"ERROR: {e}"
 
 @tool
 def search_visually_similar_sarees(image_path_or_url: str) -> str:
@@ -76,8 +90,10 @@ def search_visually_similar_sarees(image_path_or_url: str) -> str:
         return "The database is currently empty or not loaded properly. Please make sure the dataset is ingested."
         
     embedding = get_image_embedding(image_path_or_url)
+    if isinstance(embedding, str) and embedding.startswith("ERROR"):
+        return f"Could not process the provided image '{image_path_or_url}'. Error details: {embedding}. Please ensure it's a valid image path or URL."
     if embedding is None:
-        return "Could not process the provided image. Please ensure it's a valid image path or URL."
+        return f"Could not process the provided image '{image_path_or_url}'. Please ensure it's a valid image path or URL."
         
     # Calculate cosine similarity (dot product since vectors are normalized)
     scores = np.dot(dataset_embeddings, embedding)
@@ -109,20 +125,13 @@ def search_visually_similar_sarees(image_path_or_url: str) -> str:
 def get_agent():
     """Initializes and returns the LangChain agent."""
     try:
-        llm = ChatGoogleGenerativeAI(temperature=0, model="gemini-1.5-flash")
+        llm = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", temperature=0.2)
     except Exception as e:
         print(f"Error initializing LLM (Did you set GOOGLE_API_KEY?): {e}")
         return None
 
     tools = [search_visually_similar_sarees]
-    memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+    system_message = "You are a helpful fashion assistant that can search for visually similar sarees based on images provided. If the user provides a local file path (e.g. C:/... or /tmp/...) or a URL, you MUST pass that EXACT string directly to the `search_visually_similar_sarees` tool. Do NOT attempt to read the file yourself or claim you cannot access it, just call the tool. Describe the products found and provide their details (SKU, price, link)."
     
-    agent = initialize_agent(
-        tools, 
-        llm, 
-        agent=AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
-        memory=memory,
-        verbose=True,
-        handle_parsing_errors=True
-    )
+    agent = create_react_agent(llm, tools, prompt=system_message)
     return agent

@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import tempfile
 import re
+import base64
 from PIL import Image
 from agent import get_agent
 from dotenv import load_dotenv
@@ -13,9 +14,8 @@ st.set_page_config(page_title="TailorTalk", page_icon="👗", layout="wide")
 st.title("👗 TailorTalk - Visual Search")
 st.write("Upload a picture of a saree or share a link, and I'll find visually similar items from our catalog!")
 
-# Initialize Agent
-if "agent" not in st.session_state:
-    st.session_state.agent = get_agent()
+# Always initialize/reload Agent
+st.session_state.agent = get_agent()
 
 # Initialize Chat History
 if "messages" not in st.session_state:
@@ -29,13 +29,12 @@ with st.sidebar:
     if uploaded_file is not None:
         st.image(uploaded_file, caption="Uploaded Image", use_container_width=True)
         if st.button("Search for this image"):
-            # Save uploaded file to a temporary location
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tf:
-                tf.write(uploaded_file.getbuffer())
-                temp_path = tf.name
+            # Save uploaded file to a local relative path to avoid LLM local path filters
+            with open("uploaded_image.png", "wb") as f:
+                f.write(uploaded_file.getbuffer())
             
             # Formulate query for the agent
-            query = f"Find sarees similar to this image: {temp_path}"
+            query = "I uploaded an image. Please use your search tool to find similar sarees. Pass the exact string 'current_upload' as the argument to the tool."
             
             # Display user message
             st.session_state.messages.append({"role": "user", "content": "I uploaded an image. Please find similar items."})
@@ -43,7 +42,10 @@ with st.sidebar:
             if st.session_state.agent:
                 with st.spinner("Searching for matches..."):
                     try:
-                        response = st.session_state.agent.run(input=query)
+                        messages = [(m["role"], m["content"]) for m in st.session_state.messages]
+                        messages.append(("user", query))
+                        response_payload = st.session_state.agent.invoke({"messages": messages})
+                        response = response_payload["messages"][-1].content
                         st.session_state.messages.append({"role": "assistant", "content": response})
                     except Exception as e:
                         st.session_state.messages.append({"role": "assistant", "content": f"An error occurred: {e}"})
@@ -57,6 +59,17 @@ for msg in st.session_state.messages:
 
 # Chat Input
 if prompt := st.chat_input("Ask me something or provide an image link..."):
+    # If the user pasted a raw base64 image
+    if prompt.startswith("data:image"):
+        try:
+            header, b64data = prompt.split(",", 1)
+            img_data = base64.b64decode(b64data)
+            with open("uploaded_image.png", "wb") as f:
+                f.write(img_data)
+            prompt = "I provided an image. Please use your search tool to find similar sarees. Pass the exact string 'current_upload' as the argument to the tool."
+        except Exception as e:
+            pass
+            
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -65,7 +78,10 @@ if prompt := st.chat_input("Ask me something or provide an image link..."):
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    response = st.session_state.agent.run(input=prompt)
+                    # Convert messages to format expected by LangGraph
+                    messages = [(m["role"], m["content"]) for m in st.session_state.messages]
+                    response_payload = st.session_state.agent.invoke({"messages": messages})
+                    response = response_payload["messages"][-1].content
                     st.markdown(response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
                 except Exception as e:
