@@ -59,3 +59,4 @@ Your app will be live and you can share the URL for the final submission.
 - **In-memory Vector Search**: For 1075 images, an in-memory NumPy dot-product is practically instantaneous and drastically simplifies deployment architecture compared to a hosted vector DB (e.g., Pinecone). If the dataset grows to hundreds of thousands of images, migrating to a dedicated vector database is recommended.
 # tailortalk_assignment
 # tailortalk_assignment
+# tailortalk_assignment
