@@ -1,0 +1,11 @@
+streamlit
+pandas
+faiss-cpu
+transformers
+torch
+Pillow
+requests
+langchain
+langchain-google-genai
+langchain-core
+python-dotenv
