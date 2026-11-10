@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-st.set_page_config(page_title="TailorTalk", page_icon="👗", layout="wide")
+st.set_page_config(page_title="VastraLens", page_icon="👗", layout="wide")
 
 def extract_text(response):
     if isinstance(response, list):
@@ -172,7 +172,7 @@ footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("👗 TailorTalk")
+st.title("👗 VastraLens")
 st.markdown("<p style='color: #B4B4B4; font-size: 1.1rem; margin-bottom: 2rem;'>Share a picture of a saree, and I'll find visually similar items from our catalog!</p>", unsafe_allow_html=True)
 
 # Always initialize/reload Agent

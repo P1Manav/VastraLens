@@ -72,7 +72,7 @@ def get_image_embedding(image_input):
         return image_features.cpu().numpy()[0]
     except Exception as e:
         import traceback
-        with open("tailortalk_debug.log", "a") as logf:
+        with open("vastralens_debug.log", "a") as logf:
             logf.write(f"ERROR processing {image_input}: {e}\n{traceback.format_exc()}\n")
         print(f"Error getting embedding for {image_input}: {e}")
         return f"ERROR: {e}"

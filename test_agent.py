@@ -1,5 +1,6 @@
+import os
 import sys
-sys.path.append('d:/Projects/TEMP/TailorTalk')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agent import get_agent
 from dotenv import load_dotenv
 load_dotenv()

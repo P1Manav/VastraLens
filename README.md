@@ -1,6 +1,6 @@
-# TailorTalk - Visual Image Search Agent
+# VastraLens — Visual Saree Search Agent
 
-This repository contains the TailorTalk visual search agent for sarees. 
+This repository contains **VastraLens**, a CLIP-powered visual search and conversational shopping assistant for sarees. 
 It uses **OpenAI's CLIP model** to generate high-quality image embeddings and **LangChain** to power a conversational agent that can find visually similar sarees from the provided catalog.
 
 ## Technical Stack Choices
@@ -57,6 +57,3 @@ Your app will be live and you can share the URL for the final submission.
 ## Assumptions & Trade-offs
 - **CLIP Model Size**: We used the `base-patch32` CLIP model to balance accuracy and memory constraints for Streamlit Cloud deployment (which usually offers ~1GB RAM for free tiers). A larger model (like SigLIP or CLIP-Large) would yield better fine-grained accuracy at the cost of higher latency and memory usage.
 - **In-memory Vector Search**: For 1075 images, an in-memory NumPy dot-product is practically instantaneous and drastically simplifies deployment architecture compared to a hosted vector DB (e.g., Pinecone). If the dataset grows to hundreds of thousands of images, migrating to a dedicated vector database is recommended.
-# tailortalk_assignment
-# tailortalk_assignment
-# tailortalk_assignment
